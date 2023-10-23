@@ -2,11 +2,12 @@ import json
 import requests
 import re
 import urllib.parse
+import os
 from urllib.parse import unquote
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-access_token = "Enter Canvas Access Token here"
+access_token = os.environ["CANVAS_ACCESS_TOKEN"]
 base_url = "https://usu.instructure.com/api/v1"
 
 boardID = ""
@@ -21,7 +22,7 @@ def fetchValuesOfBoard(action):
     
     headers = {
         'Content-Type': 'application/json',
-        'Authorization' : "Enter Canvas Access Token here"
+        'Authorization' : os.environ["MONDAY_API_KEY"]
     }
     
     data = {
@@ -29,17 +30,19 @@ def fetchValuesOfBoard(action):
     }
     
     response = requests.post(url, headers=headers, json=data)
+    print(response.text)
     response = json.loads(response.text)
     
     print(response)
     return response
     
 def addCategories(entry_id, category_id):
-    secrets_params = {'secret':'',
-        'partnerId':
+    secrets_params = {
+        'secret': os.environ["YOUTUBE_API_KEY"],
+        'partnerId':1530551,
         'privileges':"",
         'type': 2,
-        'userId':'',
+        'userId':'captions@usu.edu',
         'format':1
         }
     
@@ -381,7 +384,7 @@ def checkCaptionedOrNot(entry_id):
 
 def checkYoutubeCaptionedOrNot(video_id):
     # Set up the YouTube Data API key and service
-    API_KEY = ""
+    API_KEY = "AIzaSyBJwzV0MlrBXlLsjoDydbmjILbAeN68QVc"
     youtube = build("youtube", "v3", developerKey=API_KEY)
 
     try:
@@ -400,7 +403,7 @@ def checkYoutubeCaptionedOrNot(video_id):
         
 def getYoutubeCaptionedType(video_id):
     # Set up the YouTube Data API key and service
-    API_KEY = ""
+    API_KEY = "AIzaSyBcUZRre3TfiNG8YAyWgnM5lpwMYa-sxDI"
     youtube = build("youtube", "v3", developerKey=API_KEY)
 
     try:
@@ -426,11 +429,11 @@ def getYoutubeCaptionedType(video_id):
         return "No Caption"
 
 def getCaptionedType(entry_id):
-    secrets_params = {'secret':'',
-          'partnerId':,
+    secrets_params = {'secret':'6e2753acd5c56f7d5b7e41d711e27f1e',
+          'partnerId':1530551,
           'privileges':"",
           'type': 2,
-          'userId':'',
+          'userId':'captions@usu.edu',
           'format':1
           }
 
@@ -508,7 +511,7 @@ def getCaptionedVideos(course_id):
 def lambda_handler(event, context):
     global statusValue
     global subitemParams
-
+    
     # TODO implement
     bodyJSON = json.loads(event['body'])
     print(bodyJSON)
@@ -518,7 +521,7 @@ def lambda_handler(event, context):
         if(bodyJSON['event']['value']['label']['text'] == "Begin Check"):
             statusValue = bodyJSON['event']['columnId']
             return getMethodHandler(bodyJSON)
-        if(bodyJSON['event']['value']['label']['text'] == "Check Caption"):
+        elif(bodyJSON['event']['value']['label']['text'] == "Check Caption"):
             statusValue = bodyJSON['event']['columnId']
             response = getBoardData(bodyJSON, "getCaption")
             kalturaId = response["data"]["boards"][0]["items"][0]["name"]
@@ -531,10 +534,25 @@ def lambda_handler(event, context):
             
             addNewURLDataQuery = f"mutation {{change_multiple_column_values (board_id: {boardID}, item_id: {rowID}, column_values:{json.dumps(json.dumps(column_value))} ) {{ id }} }}"
             fetchValuesOfBoard(addNewURLDataQuery)
+        # elif(bodyJSON['event']['value']['label']['text'] == "Check Captions for All"):
+        #     statusValue = bodyJSON['event']['columnId']
+        #     response = getBoardData(bodyJSON, "getCaptionAll")
+        #     for response_item in response["data"]["boards"][0]["items"]:
+        #         kalturaId = response_item["name"]
+        #         print(response_item)
+                # column_value = {
+                #     statusValue: "Done",
+                #     subitemParams["captioned"]: "True" if checkCaptionedOrNot(kalturaId) else "False",
+                #     subitemParams["caption_type"]: getCaptionedType(kalturaId)
+                # }
+                
+                # addNewURLDataQuery = f"mutation {{change_multiple_column_values (board_id: {boardID}, item_id: {rowID}, column_values:{json.dumps(json.dumps(column_value))} ) {{ id }} }}"
+                # fetchValuesOfBoard(addNewURLDataQuery)
         elif(bodyJSON['event']['columnTitle'] == "3Play"):
             response = getBoardData(bodyJSON, "categories")
             entry_id = response['data']['boards'][0]['items'][0]['name']
             category_id = response['data']['boards'][0]['items'][0]['column_values'][0]['text']
+            print(response)
             addCategories(entry_id, category_id)
             return {
                 'statusCode': 200,
@@ -567,12 +585,13 @@ def getBoardData(req, method):
     columnID = req['event']['columnId']
     linkId = ""
     
-    column_value = {
-        statusValue: "Check in Progress"
-    }
-    
-    addNewURLDataQuery = f"mutation {{change_multiple_column_values (board_id: {boardID}, item_id: {rowID}, column_values:{json.dumps(json.dumps(column_value))} ) {{ id }} }}"
-    fetchValuesOfBoard(addNewURLDataQuery)
+    if(method != "categories"):
+        column_value = {
+            statusValue: "Check in Progress"
+        }
+        
+        addNewURLDataQuery = f"mutation {{change_multiple_column_values (board_id: {boardID}, item_id: {rowID}, column_values:{json.dumps(json.dumps(column_value))} ) {{ id }} }}"
+        fetchValuesOfBoard(addNewURLDataQuery)
     
     getTableSchema = """query {
                             boards (ids:%s){
@@ -589,38 +608,60 @@ def getBoardData(req, method):
     schemaResponse = fetchValuesOfBoard(getTableSchema % (boardID))
     tableSchema = schemaResponse['data']['boards'][0]['columns']
     
-    for schema in tableSchema:
-        if schema["title"] == "Link":
-            linkId = schema["id"]
-        if schema["title"] == "Kaltura":
-            kalturaId = schema["id"]
-        if schema["title"] == "Captioned?":
-            subitemParams["captioned"] = schema["id"]
-        if schema["title"] == "Caption Type":
-            subitemParams["caption_type"] = schema["id"]
-        if schema["title"] == "Subitems":
-            temp = json.loads(schema["settings_str"])
-            subitemBoardId = temp['boardIds'][0]
-            subitemSchemaResponse = fetchValuesOfBoard(getTableSchema % (subitemBoardId))
-            subitemTableSchema = subitemSchemaResponse['data']['boards'][0]['columns']
-            print("checking")
-            print(subitemTableSchema)
-            for subitem_column in subitemTableSchema:
-                if subitem_column["title"] == "Page Name":
-                    subitemParams['page_name'] = subitem_column["id"]
-                if subitem_column["title"] == "Link to Page":
-                    subitemParams['link_to_page'] = subitem_column["id"]
-                if subitem_column["title"] == "Video Type":
-                    subitemParams['video_type'] = subitem_column["id"]
-                if subitem_column["title"] == "Published":
-                    subitemParams['published'] = subitem_column["id"]
-                if subitem_column["title"] == "Captioned?":
-                    subitemParams['captioned'] = subitem_column["id"]
-                if subitem_column["title"] == "Caption Type":
-                    subitemParams['caption_type'] = subitem_column["id"]
-                if subitem_column["title"] == "3Play":
-                    subitemParams['3play'] = subitem_column["id"]
-    
+    print("subitems")
+    print(tableSchema)
+    if(method != "categories"):
+        for schema in tableSchema:
+            if schema["title"] == "Link":
+                linkId = schema["id"]
+            if schema["title"] == "Kaltura":
+                kalturaId = schema["id"]
+            if schema["title"] == "Captioned?":
+                subitemParams["captioned"] = schema["id"]
+            if schema["title"] == "Caption Type":
+                subitemParams["caption_type"] = schema["id"]
+            if schema["title"] == "Subitems":
+                temp = json.loads(schema["settings_str"])
+                subitemBoardId = temp['boardIds'][0]
+                subitemSchemaResponse = fetchValuesOfBoard(getTableSchema % (subitemBoardId))
+                subitemTableSchema = subitemSchemaResponse['data']['boards'][0]['columns']
+                print("checking")
+                print(subitemTableSchema)
+                for subitem_column in subitemTableSchema:
+                    if subitem_column["title"] == "Page Name":
+                        subitemParams['page_name'] = subitem_column["id"]
+                    if subitem_column["title"] == "Link to Page":
+                        subitemParams['link_to_page'] = subitem_column["id"]
+                    if subitem_column["title"] == "Video Type":
+                        subitemParams['video_type'] = subitem_column["id"]
+                    if subitem_column["title"] == "Published":
+                        subitemParams['published'] = subitem_column["id"]
+                    if subitem_column["title"] == "Captioned?":
+                        subitemParams['captioned'] = subitem_column["id"]
+                    if subitem_column["title"] == "Caption Type":
+                        subitemParams['caption_type'] = subitem_column["id"]
+                    if subitem_column["title"] == "3Play":
+                        subitemParams['3play'] = subitem_column["id"]
+    else:
+        for subitem_column in tableSchema:
+            if subitem_column["title"] == "Page Name":
+                subitemParams['page_name'] = subitem_column["id"]
+            if subitem_column["title"] == "Link to Page":
+                subitemParams['link_to_page'] = subitem_column["id"]
+            if subitem_column["title"] == "Video Type":
+                subitemParams['video_type'] = subitem_column["id"]
+            if subitem_column["title"] == "Published":
+                subitemParams['published'] = subitem_column["id"]
+            if subitem_column["title"] == "Captioned?":
+                subitemParams['captioned'] = subitem_column["id"]
+            if subitem_column["title"] == "Caption Type":
+                subitemParams['caption_type'] = subitem_column["id"]
+            if subitem_column["title"] == "3Play":
+                subitemParams['3play'] = subitem_column["id"]
+            
+        
+    print("checking")
+    print(subitemParams)
     getCaptionsTableData = """query {
                                     boards (ids:%s){
                                         name
@@ -668,15 +709,34 @@ def getBoardData(req, method):
                                             }
                                         }
                                 }""" % (boardID, rowID, subitemParams['3play'] if '3play' in subitemParams else None)
+    
+    getCaptionsTableData_3 = """query {
+                                    boards (ids:%s){
+                                        name
+                                        items {
+                                          id
+                                          name
+                                          column_values{
+                                            id
+                                            title
+                                            type
+                                            text
+                                          }
+                                        }
+                                    }
+                                }""" %(boardID)
                                 
     if method == "captions":
         print(getCaptionsTableData)
         return fetchValuesOfBoard(getCaptionsTableData)
     elif method == "categories":
+        print("hello")
         print(getCategoriesTableData)
         return fetchValuesOfBoard(getCategoriesTableData)
     elif method == "getCaption":
         return fetchValuesOfBoard(getCaptionsTableData_2)
+    elif method == "getCaptionAll":
+        return fetchValuesOfBoard(getCaptionsTableData_3)
 
 def getMethodHandler(req):
     global subitemParams
