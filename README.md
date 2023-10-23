@@ -26,7 +26,7 @@ Monday Caption Check is a powerful tool designed to enhance the accessibility of
 
 3. **Caption Checking**: The tool scans the Canvas courses, fetches the videos, and checks their caption status. It adds and updates the status as subitems in the Monday board.
 
-![Blank board - Page 1](https://github.com/usu-access/monday-captioncheck/assets/41461773/5e8150ad-5137-4acb-8274-cad31bcd0992)
+![Screenshot 2023-10-23 at 4 58 15 PM](https://github.com/usu-access/monday-captioncheck/assets/41461773/d79a5c46-3e1f-484b-a48d-f1fb40c8f22d)
 
 4. **Caption Type**: If videos are captioned, the tool specifies whether the captions are "Auto-generated" or "Human-generated."
 
